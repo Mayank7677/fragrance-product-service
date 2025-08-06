@@ -16,7 +16,7 @@ export interface IProduct {
   gender: "male" | "female" | "unisex";
   notes?: string[];
   launchDate?: Date;
-  images?: string[];
+  images?: { url: string; fileId: string }[];
   isFeatured?: boolean;
   isActive?: boolean;
   createdBy?: Types.ObjectId;
