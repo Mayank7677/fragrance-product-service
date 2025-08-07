@@ -169,14 +169,18 @@ export const updateProductStatus = catchAsync(
   }
 );
 
+
 export const updateProduct = catchAsync(
   async (req: AuthenticatedRequest, res: Response, next: NextFunction) => {
-    const { id } = req.params;
+    const productId = req.params.id;
     const files = req.files as Express.Multer.File[];
 
-    const product = await Product.findById(id);
+    const product = await Product.findById(productId);
     if (!product) return next(new AppError("Product not found", 404));
 
+    console.log(req.body);
+
+    // Parse body fields
     const {
       name,
       description,
@@ -186,48 +190,89 @@ export const updateProduct = catchAsync(
       launchDate,
       isFeatured,
       isActive,
-      tags,
       variants,
+      tags,
+      existingImages,
     } = req.body;
 
-    // 🔁 Update basic fields if provided
-    if (name) product.name = name;
-    if (description) product.description = description;
-    if (collectionName) product.collectionName = collectionName;
-    if (gender) product.gender = gender;
-    if (launchDate) product.launchDate = launchDate;
-    if (isFeatured !== undefined) product.isFeatured = isFeatured === "true";
-    if (isActive !== undefined) product.isActive = isActive === "true";
-    if (tags) product.tags = JSON.parse(tags);
-    if (notes) product.notes = JSON.parse(notes);
-    if (variants) product.variants = JSON.parse(variants);
+    // Keep original images by default
+    let allImages = product.images;
 
-    // 🔄 Handle image replacement (if new images provided)
-    if (files && files.length > 0) {
-      // Delete old images from ImageKit
-      for (const img of product.images || []) {
-        await imagekit.deleteFile(img.fileId);
+    // Only perform image updates if existingImages or files are provided
+    if (existingImages || (files && files.length > 0)) {
+      let parsedExistingImages: { url: string; fileId: string }[] = [];
+
+      if (existingImages) {
+        try {
+          parsedExistingImages = JSON.parse(existingImages);
+        } catch (err) {
+          return next(new AppError("Invalid existingImages format", 400));
+        }
+
+        // Delete removed images from ImageKit
+        const existingFileIds = parsedExistingImages.map((img) => img.fileId);
+        const imagesToDelete = product.images.filter(
+          (img: any) => !existingFileIds.includes(img.fileId)
+        );
+
+        await Promise.all(
+          imagesToDelete.map((img: any) =>
+            imagekit.deleteFile(img.fileId).catch(() => null)
+          )
+        );
       }
 
       // Upload new images
-      const uploaded = await Promise.all(
-        files.map((file) =>
-          imagekit.upload({
-            file: file.buffer,
-            fileName: file.originalname,
-            folder: "/perfumes",
-          })
-        )
-      );
+      let newImages: { url: string; fileId: string }[] = [];
+      if (files && files.length > 0) {
+        const uploads = await Promise.all(
+          files.map((file) =>
+            imagekit.upload({
+              file: file.buffer,
+              fileName: file.originalname,
+              folder: "/perfumes",
+            })
+          )
+        );
 
-      product.images = uploaded.map((img) => ({
-        url: img.url,
-        fileId: img.fileId,
-      }));
+        newImages = uploads.map((img) => ({
+          url: img.url,
+          fileId: img.fileId,
+        }));
+      }
+
+      // Combine both
+      allImages = [...(parsedExistingImages || []), ...newImages];
     }
 
-    await product.save();
+    // Prepare update object
+    const data: any = {
+      ...(name && { name }),
+      ...(description && { description }),
+      ...(collectionName && { collectionName }),
+      ...(gender && { gender }),
+      ...(launchDate && { launchDate }),
+      ...(isFeatured !== undefined && { isFeatured }),
+      ...(isActive !== undefined && { isActive }),
+      ...(tags && { tags: typeof tags === "string" ? JSON.parse(tags) : tags }),
+      ...(variants && {
+        variants: typeof variants === "string" ? JSON.parse(variants) : variants,
+      }),
+      ...(notes && {
+        notes: typeof notes === "string" ? JSON.parse(notes) : notes,
+      }),
+      ...(existingImages || (files && files.length > 0) ? { images: allImages } : {}),
+    };
 
-    res.status(200).json({ message: "Product updated successfully", product });
+    const updated = await Product.findByIdAndUpdate(productId, data, {
+      new: true,
+    });
+
+    res.status(200).json({
+      message: "Product updated successfully",
+      product: updated,
+    });
   }
 );
+
+

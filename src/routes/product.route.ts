@@ -3,6 +3,7 @@ import {
   createProduct,
   getAllProducts,
   getProductById,
+  updateProduct,
   updateProductStatus,
 } from "../controllers/product.controller";
 import { authMiddleware } from "../middlewares/auth.middleware";
@@ -21,5 +22,12 @@ productRouter.post(
 productRouter.get("/", getAllProducts);
 productRouter.get("/:id", getProductById);
 productRouter.delete("/:id", authMiddleware, isAdmin, updateProductStatus);
+productRouter.patch(
+  "/:id",
+  authMiddleware,
+  isAdmin,
+  upload.array("images"),
+  updateProduct
+);
 
 export default productRouter;
