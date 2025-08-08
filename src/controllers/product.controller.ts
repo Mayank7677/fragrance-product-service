@@ -5,9 +5,22 @@ import imagekit from "../configs/imagekit";
 import Product from "../models/product.model";
 import logger from "../utils/logger";
 import { AppError } from "../utils/appError";
+import { Collection } from "../models/collection.model";
+import { Types } from "mongoose";
 
 export const createProduct = catchAsync(
   async (req: AuthenticatedRequest, res: Response, next: NextFunction) => {
+    const { collectionId } = req.params;
+    const findCollection = await Collection.findById(collectionId);
+
+    if (!collectionId) {
+      return next(new AppError("Please provide a collection id", 400));
+    }
+
+    if (!findCollection) {
+      return next(new AppError("Collection not found", 404));
+    }
+
     const files = req.files as Express.Multer.File[];
 
     // Upload images to ImageKit
@@ -35,7 +48,6 @@ export const createProduct = catchAsync(
     const {
       name,
       description,
-      collectionName,
       gender,
       notes,
       launchDate,
@@ -49,7 +61,7 @@ export const createProduct = catchAsync(
     const product = await new Product({
       name,
       description,
-      collectionName,
+      collectionId,
       gender,
       notes: notes ? JSON.parse(notes) : [],
       launchDate,
@@ -76,7 +88,6 @@ export const getAllProducts = catchAsync(
       limit = 10,
       search,
       gender,
-      collectionName,
       isFeatured,
       isActive,
       sortBy = "createdAt",
@@ -94,7 +105,6 @@ export const getAllProducts = catchAsync(
 
     // direct filters
     if (gender) filter.gender = gender;
-    if (collectionName) filter.collectionName = collectionName;
     if (isFeatured !== undefined) filter.isFeatured = isFeatured === "true";
     if (isActive !== undefined) filter.isActive = isActive === "true";
 
@@ -111,13 +121,12 @@ export const getAllProducts = catchAsync(
 
     const skip: number = (+page - 1) * +limit;
 
-    console.log("Generated filter:", JSON.stringify(filter, null, 2));
-
     const [products, total] = await Promise.all([
       Product.find(filter)
         .sort({ [sortBy as string]: order === "asc" ? 1 : -1 })
         .skip(skip)
-        .limit(+limit),
+        .limit(+limit)
+        .populate("collectionId", "name slug"),
 
       Product.countDocuments(filter),
     ]);
@@ -139,7 +148,10 @@ export const getProductById = catchAsync(
 
     if (!id) return next(new AppError("Please provide a product id", 400));
 
-    const product = await Product.findById(id);
+    const product = await Product.findById(id).populate(
+      "collectionId",
+      "name slug"
+    );
 
     if (!product) return next(new AppError("Product not found", 404));
 
@@ -159,7 +171,10 @@ export const updateProductStatus = catchAsync(
       );
     }
 
-    const product = await Product.findById(id);
+    const product = await Product.findById(id).populate(
+      "collectionId",
+      "name slug"
+    );
     if (!product) return next(new AppError("Product not found", 404));
 
     product.isActive = isActive;
@@ -169,7 +184,6 @@ export const updateProductStatus = catchAsync(
   }
 );
 
-
 export const updateProduct = catchAsync(
   async (req: AuthenticatedRequest, res: Response, next: NextFunction) => {
     const productId = req.params.id;
@@ -178,13 +192,10 @@ export const updateProduct = catchAsync(
     const product = await Product.findById(productId);
     if (!product) return next(new AppError("Product not found", 404));
 
-    console.log(req.body);
-
     // Parse body fields
     const {
       name,
       description,
-      collectionName,
       gender,
       notes,
       launchDate,
@@ -249,19 +260,21 @@ export const updateProduct = catchAsync(
     const data: any = {
       ...(name && { name }),
       ...(description && { description }),
-      ...(collectionName && { collectionName }),
       ...(gender && { gender }),
       ...(launchDate && { launchDate }),
       ...(isFeatured !== undefined && { isFeatured }),
       ...(isActive !== undefined && { isActive }),
       ...(tags && { tags: typeof tags === "string" ? JSON.parse(tags) : tags }),
       ...(variants && {
-        variants: typeof variants === "string" ? JSON.parse(variants) : variants,
+        variants:
+          typeof variants === "string" ? JSON.parse(variants) : variants,
       }),
       ...(notes && {
         notes: typeof notes === "string" ? JSON.parse(notes) : notes,
       }),
-      ...(existingImages || (files && files.length > 0) ? { images: allImages } : {}),
+      ...(existingImages || (files && files.length > 0)
+        ? { images: allImages }
+        : {}),
     };
 
     const updated = await Product.findByIdAndUpdate(productId, data, {
@@ -275,4 +288,72 @@ export const updateProduct = catchAsync(
   }
 );
 
+export const getProductsByCollection = catchAsync(
+  async (req: AuthenticatedRequest, res: Response, next: NextFunction) => {
+    const { collectionId } = req.params;
+    const {
+      page = 1,
+      limit = 10,
+      search = "",
+      gender,
+      isFeatured,
+      minPrice,
+      maxPrice,
+    } = req.query;
 
+    // Validate collectionId
+    if (!Types.ObjectId.isValid(collectionId)) {
+      return next(new AppError("Invalid collectionId", 400));
+    }
+
+    // Check collection existence
+    const collectionExists = await Collection.findById(collectionId);
+    if (!collectionExists) {
+      return next(new AppError("Collection not found", 404));
+    }
+
+    // Filters
+    const query: any = {
+      collectionId: collectionId,
+      isActive: true,
+    };
+
+    if (search) {
+      query.name = { $regex: search, $options: "i" };
+    }
+
+    if (gender) {
+      query.gender = gender;
+    }
+
+    if (isFeatured !== undefined) {
+      query.isFeatured = isFeatured === "true";
+    }
+
+    if (minPrice || maxPrice) {
+      query["variants.price"] = {};
+      if (minPrice) query["variants.price"].$gte = Number(minPrice);
+      if (maxPrice) query["variants.price"].$lte = Number(maxPrice);
+    }
+
+    const skip = (Number(page) - 1) * Number(limit);
+
+    const [products, total] = await Promise.all([
+      Product.find(query)
+        .populate("collectionId", "name slug")
+        // .populate("createdBy", "name email")                               // todo : user model not present in this database
+        .sort({ createdAt: -1 })
+        .skip(skip)
+        .limit(Number(limit)),
+      Product.countDocuments(query),
+    ]);
+
+    res.status(200).json({
+      success: true,
+      total,
+      page: Number(page),
+      pages: Math.ceil(total / Number(limit)),
+      products,
+    });
+  }
+);

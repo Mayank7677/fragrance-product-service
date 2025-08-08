@@ -6,7 +6,7 @@ const ProductSchema = new Schema<IProductDocument>(
     name: { type: String, required: true, trim: true },
     slug: { type: String, unique: true },
     description: { type: String, required: true },
-    collectionName: { type: String },
+    collectionId: { type: Types.ObjectId, ref: "Collection" },
     gender: {
       type: String,
       enum: ["male", "female", "unisex"],

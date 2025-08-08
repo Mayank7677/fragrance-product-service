@@ -3,6 +3,7 @@ import {
   createProduct,
   getAllProducts,
   getProductById,
+  getProductsByCollection,
   updateProduct,
   updateProductStatus,
 } from "../controllers/product.controller";
@@ -13,7 +14,7 @@ import { upload } from "../middlewares/upload.middleware";
 const productRouter = express.Router();
 
 productRouter.post(
-  "/create",
+  "/create/:collectionId",
   authMiddleware,
   isAdmin,
   upload.array("images", 3),
@@ -29,5 +30,6 @@ productRouter.patch(
   upload.array("images"),
   updateProduct
 );
+productRouter.get("/collections/:collectionId", getProductsByCollection);
 
 export default productRouter;

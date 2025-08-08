@@ -12,7 +12,7 @@ export interface IProduct {
   name: string;
   slug: string;
   description: string;
-  collectionName?: string;
+  collectionId?: Types.ObjectId;
   gender: "male" | "female" | "unisex";
   notes?: string[];
   launchDate?: Date;

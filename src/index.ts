@@ -6,7 +6,9 @@ import cookieParser from "cookie-parser";
 import configureCors from "./configs/cors.config";
 import { errorHandler } from "./middlewares/errorHandler";
 import limiter from "./middlewares/rateLimit";
+
 import productRouter from "./routes/product.route";
+import collectionRouter from "./routes/collection.route";
 
 const app = express();
 
@@ -18,6 +20,7 @@ app.use(limiter);
 
 // Routes
 app.use("/api/products", productRouter);
+app.use("/api/collections", collectionRouter);
 
 // Global Error Handler
 app.use(errorHandler);
