@@ -6,6 +6,8 @@ import imagekit from "../configs/imagekit";
 import logger from "../utils/logger";
 import slugify from "slugify";
 import { Collection } from "../models/collection.model";
+import { startSession } from "mongoose";
+import productModel from "../models/product.model";
 
 export const createCollection = catchAsync(
   async (req: AuthenticatedRequest, res: Response, next: NextFunction) => {
@@ -157,16 +159,34 @@ export const updateCollectionStatus = catchAsync(
       );
     }
 
-    const collection = await Collection.findById(id);
+    const session = await startSession();
+    session.startTransaction();
 
-    if (!collection) return next(new AppError("Collection not found", 404));
+    try {
+      const collection = await Collection.findById(id).session(session);
 
-    collection.isActive = isActive;
-    await collection.save();
+      if (!collection) return next(new AppError("Collection not found", 404));
 
-    res.status(200).json({
-      message: "Collection status updated successfully",
-      collection,
-    });
+      collection.isActive = isActive;
+      await collection.save({ session });
+
+      await productModel.updateMany(
+        { collectionId: id },
+        { $set: { isActive } },
+        { session }
+      );
+
+      await session.commitTransaction();
+      await session.endSession();
+
+      res.status(200).json({
+        message: "Collection and products status updated successfully",
+        collection,
+      });
+    } catch (error) {
+      await session.abortTransaction();
+      await session.endSession();
+      return next(error);
+    }
   }
 );
