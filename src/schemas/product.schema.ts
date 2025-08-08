@@ -20,7 +20,7 @@ export interface IProduct {
   isFeatured?: boolean;
   isActive?: boolean;
   createdBy?: Types.ObjectId;
-  variants: IVariant[];
+  // variants: IVariant[];
   tags?: string[];
   reviewCount?: number;
   ratingAverage?: number;

@@ -53,7 +53,6 @@ export const createProduct = catchAsync(
       launchDate,
       isFeatured,
       isActive,
-      variants,
       tags,
     } = req.body;
 
@@ -68,7 +67,6 @@ export const createProduct = catchAsync(
       isFeatured,
       isActive,
       tags: tags ? JSON.parse(tags) : [],
-      variants: variants ? JSON.parse(variants) : [],
       images: images,
       createdBy: req.user.userId,
     });
@@ -109,9 +107,9 @@ export const getAllProducts = catchAsync(
     if (isActive !== undefined) filter.isActive = isActive === "true";
 
     // Filter by variant size
-    if (size) {
-      filter["variants.size"] = size;
-    }
+    // if (size) {
+    //   filter["variants.size"] = size;
+    // }
 
     // Filter by tags (expects comma-separated list like ?tags=luxury,woody)
     if (tags) {
@@ -201,7 +199,6 @@ export const updateProduct = catchAsync(
       launchDate,
       isFeatured,
       isActive,
-      variants,
       tags,
       existingImages,
     } = req.body;
@@ -265,10 +262,6 @@ export const updateProduct = catchAsync(
       ...(isFeatured !== undefined && { isFeatured }),
       ...(isActive !== undefined && { isActive }),
       ...(tags && { tags: typeof tags === "string" ? JSON.parse(tags) : tags }),
-      ...(variants && {
-        variants:
-          typeof variants === "string" ? JSON.parse(variants) : variants,
-      }),
       ...(notes && {
         notes: typeof notes === "string" ? JSON.parse(notes) : notes,
       }),
@@ -328,12 +321,6 @@ export const getProductsByCollection = catchAsync(
 
     if (isFeatured !== undefined) {
       query.isFeatured = isFeatured === "true";
-    }
-
-    if (minPrice || maxPrice) {
-      query["variants.price"] = {};
-      if (minPrice) query["variants.price"].$gte = Number(minPrice);
-      if (maxPrice) query["variants.price"].$lte = Number(maxPrice);
     }
 
     const skip = (Number(page) - 1) * Number(limit);

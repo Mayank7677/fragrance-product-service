@@ -24,24 +24,6 @@ const ProductSchema = new Schema<IProductDocument>(
     isActive: { type: Boolean, default: true },
     createdBy: { type: Types.ObjectId, ref: "User" },
 
-    variants: [
-      {
-        size: { type: String, required: true }, // "50ml" / "100ml"
-        sku: { type: String, required: true, unique: true },
-        price: {
-          type: Number,
-          required: true,
-          min: [0, "Price cannot be negative"],
-        },
-        stock: {
-          type: Number,
-          required: true,
-          min: [0, "Stock cannot be negative"],
-        },
-        isLimitedEdition: { type: Boolean, default: false },
-      },
-    ],
-
     tags: [{ type: String }],
     reviewCount: { type: Number, default: 0 },
     ratingAverage: { type: Number, default: 0 },
