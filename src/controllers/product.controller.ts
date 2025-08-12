@@ -57,6 +57,8 @@ export const createProduct = catchAsync(
       tags,
     } = req.body;
 
+    logger.info("creating product");
+
     // Create product
     const product = await new Product({
       name,

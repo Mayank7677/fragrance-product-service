@@ -32,7 +32,7 @@ productRouter.patch(
   upload.array("images"),
   updateProduct
 );
-productRouter.get("/collections/:collectionId", getProductsByCollection);
+productRouter.get("/by-collection/:collectionId", getProductsByCollection);
 
 // productRouter.patch(
 //   "/collections/:collectionId/apply-discount", authMiddleware , isAdmin , applyDiscountToCollection)
