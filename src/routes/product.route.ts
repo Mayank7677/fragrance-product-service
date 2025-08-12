@@ -34,6 +34,8 @@ productRouter.patch(
 );
 productRouter.get("/collections/:collectionId", getProductsByCollection);
 
+// productRouter.patch(
+//   "/collections/:collectionId/apply-discount", authMiddleware , isAdmin , applyDiscountToCollection)
 productRouter.patch(
   "/collections/:collectionId/apply-discount", authMiddleware , isAdmin , applyDiscountToCollection)
 productRouter.patch(

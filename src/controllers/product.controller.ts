@@ -346,10 +346,50 @@ export const getProductsByCollection = catchAsync(
   }
 );
 
+// export const applyDiscountToCollection = catchAsync(
+//   async (req: AuthenticatedRequest, res: Response, next: NextFunction) => {
+//     const { collectionId } = req.params;
+//     const { discountPercent } = req.body;
+
+//     if (!collectionId)
+//       return next(new AppError("Please provide a collection id", 400));
+//     if (typeof discountPercent !== "number")
+//       return next(new AppError("Please provide a valid discount percent", 400));
+
+//     // get all products of collection
+//     const products = await Product.find({ collectionId });
+
+//     if (!products.length)
+//       return next(new AppError("No products found in collection", 404));
+
+//     // product Ids
+//     const productIds = products.map((product) => product._id);
+
+//     // calling inventory service to apply discount
+//     let result = await axios.patch(
+//       `${process.env.INVENTORY_SERVICE_URL}/api/variants/update-discount-by-collection`,
+//       {
+//         productIds,
+//         discountPercent,
+//       },
+//       {
+//         headers: {
+//           Authorization: req.headers.authorization,
+//         },
+//       }
+//     );
+
+//     res.status(200).json({
+//       message: "Discount applied successfully",
+//     });
+//   }
+// );
+
 export const applyDiscountToCollection = catchAsync(
   async (req: AuthenticatedRequest, res: Response, next: NextFunction) => {
     const { collectionId } = req.params;
     const { discountPercent } = req.body;
+    const adminUserId = req.user?.userId || null; // from auth middleware
 
     if (!collectionId)
       return next(new AppError("Please provide a collection id", 400));
@@ -365,23 +405,82 @@ export const applyDiscountToCollection = catchAsync(
     // product Ids
     const productIds = products.map((product) => product._id);
 
-    // calling inventory service to apply discount
-    let result = await axios.patch(
-      `${process.env.INVENTORY_SERVICE_URL}/api/variants/update-discount-by-collection`,
-      {
-        productIds,
-        discountPercent,
-      },
-      {
-        headers: {
-          Authorization: req.headers.authorization,
+    try {
+      // calling inventory service to apply discount
+      let result = await axios.patch(
+        `${process.env.INVENTORY_SERVICE_URL}/api/variants/update-discount-by-collection`,
+        {
+          productIds,
+          discountPercent,
+          initiatedBy: adminUserId,
         },
-      }
-    );
+        {
+          headers: {
+            Authorization: req.headers.authorization,
+            "x-internal-key": process.env.INTERNAL_API_KEY,
+          },
+        }
+      );
 
-    res.status(200).json({
-      message: "Discount applied successfully",
-    });
+      logger.info("Inventory prepare returned successfully" + result.data);
+      const { operationId } = result.data as { operationId: string };
+      logger.info("applyDiscountToCollection operationId: " + operationId);
+
+      // At this point inventory has applied changes and recorded audit (status pending).
+      // If Product Service has additional steps (e.g., update collection metadata), do them here.
+
+      // if all okay
+      await axios.post(
+        `${process.env.INVENTORY_SERVICE_URL}/api/variants/commit-bulk-discount`,
+        {
+          operationId,
+        },
+        {
+          headers: {
+            Authorization: req.headers.authorization,
+            "x-internal-key": process.env.INTERNAL_API_KEY,
+          },
+        }
+      );
+
+      res.status(200).json({
+        message: "Discount applied successfully",
+      });
+    } catch (err: any) {
+      // Inventory prepare might have succeeded but subsequent product service actions failed.
+      // Try to rollback inventory if we have an operationId
+
+      console.log(err);
+      console.log(
+        "err.response?.config?.data?.operationId",
+        JSON.parse(err.response?.config?.data || "{}").operationId
+      );
+      const opId = JSON.parse(err.response?.config?.data || "{}").operationId;
+      logger.error("applyDiscountToCollection operationId: " + opId);
+
+      if (opId) {
+        try {
+          await axios.post(
+            `${process.env.INVENTORY_SERVICE_URL}/api/variants/rollback-bulk-discount`,
+            {
+              operationId: opId,
+            },
+            {
+              headers: {
+                Authorization: req.headers.authorization,
+                "x-internal-key": process.env.INTERNAL_API_KEY,
+              },
+            }
+          );
+        } catch (error: any) {
+          logger.error("Rollback failed", error);
+        }
+      }
+
+      return next(
+        new AppError(err.response?.data?.message || err.message, 500)
+      );
+    }
   }
 );
 
