@@ -7,6 +7,7 @@ import logger from "../utils/logger";
 import { AppError } from "../utils/appError";
 import { Collection } from "../models/collection.model";
 import { Types } from "mongoose";
+import axios from "axios";
 
 export const createProduct = catchAsync(
   async (req: AuthenticatedRequest, res: Response, next: NextFunction) => {
@@ -341,6 +342,80 @@ export const getProductsByCollection = catchAsync(
       page: Number(page),
       pages: Math.ceil(total / Number(limit)),
       products,
+    });
+  }
+);
+
+export const applyDiscountToCollection = catchAsync(
+  async (req: AuthenticatedRequest, res: Response, next: NextFunction) => {
+    const { collectionId } = req.params;
+    const { discountPercent } = req.body;
+
+    if (!collectionId)
+      return next(new AppError("Please provide a collection id", 400));
+    if (typeof discountPercent !== "number")
+      return next(new AppError("Please provide a valid discount percent", 400));
+
+    // get all products of collection
+    const products = await Product.find({ collectionId });
+
+    if (!products.length)
+      return next(new AppError("No products found in collection", 404));
+
+    // product Ids
+    const productIds = products.map((product) => product._id);
+
+    // calling inventory service to apply discount
+    let result = await axios.patch(
+      `${process.env.INVENTORY_SERVICE_URL}/api/variants/update-discount-by-collection`,
+      {
+        productIds,
+        discountPercent,
+      },
+      {
+        headers: {
+          Authorization: req.headers.authorization,
+        },
+      }
+    );
+
+    res.status(200).json({
+      message: "Discount applied successfully",
+    });
+  }
+);
+
+export const removeDiscountFromCollection = catchAsync(
+  async (req: AuthenticatedRequest, res: Response, next: NextFunction) => {
+    const { collectionId } = req.params;
+
+    if (!collectionId)
+      return next(new AppError("Please provide a collection id", 400));
+
+    // get all products of collection
+    const products = await Product.find({ collectionId });
+
+    if (!products.length)
+      return next(new AppError("No products found in collection", 404));
+
+    // product Ids
+    const productIds = products.map((product) => product._id);
+
+    // calling inventory service to remove discount
+    let result = await axios.patch(
+      `${process.env.INVENTORY_SERVICE_URL}/api/variants/remove-discount-by-collection`,
+      {
+        productIds,
+      },
+      {
+        headers: {
+          Authorization: req.headers.authorization,
+        },
+      }
+    );
+
+    res.status(200).json({
+      message: "Discount removed successfully",
     });
   }
 );

@@ -1,9 +1,11 @@
 import express from "express";
 import {
+  applyDiscountToCollection,
   createProduct,
   getAllProducts,
   getProductById,
   getProductsByCollection,
+  removeDiscountFromCollection,
   updateProduct,
   updateProductStatus,
 } from "../controllers/product.controller";
@@ -31,5 +33,10 @@ productRouter.patch(
   updateProduct
 );
 productRouter.get("/collections/:collectionId", getProductsByCollection);
+
+productRouter.patch(
+  "/collections/:collectionId/apply-discount", authMiddleware , isAdmin , applyDiscountToCollection)
+productRouter.patch(
+  "/collections/:collectionId/remove-discount", authMiddleware , isAdmin , removeDiscountFromCollection)
 
 export default productRouter;
