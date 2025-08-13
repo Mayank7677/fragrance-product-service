@@ -3,6 +3,7 @@ import {
   applyDiscountToCollection,
   createProduct,
   getAllProducts,
+  getAllProductsByIds,
   getProductById,
   getProductsByCollection,
   removeDiscountFromCollection,
@@ -22,6 +23,8 @@ productRouter.post(
   upload.array("images", 3),
   createProduct
 );
+
+productRouter.get("/all-by-product-ids", getAllProductsByIds);
 productRouter.get("/", getAllProducts);
 productRouter.get("/:id", getProductById);
 productRouter.delete("/:id", authMiddleware, isAdmin, updateProductStatus);
@@ -33,6 +36,7 @@ productRouter.patch(
   updateProduct
 );
 productRouter.get("/by-collection/:collectionId", getProductsByCollection);
+
 
 // productRouter.patch(
 //   "/collections/:collectionId/apply-discount", authMiddleware , isAdmin , applyDiscountToCollection)

@@ -520,3 +520,17 @@ export const removeDiscountFromCollection = catchAsync(
     });
   }
 );
+
+export const getAllProductsByIds = catchAsync(
+  async (req: AuthenticatedRequest, res: Response, next: NextFunction) => {
+    console.log(req.query.productIds);
+    const ids = (req.query.productIds as string)?.split(",") || [];
+
+    // Convert all IDs to Mongo ObjectId type
+    const objectIds = ids.map((id) => new Types.ObjectId(id));
+
+    console.log(objectIds);
+    const products = await Product.find({ _id: { $in: objectIds } });
+    res.status(200).json({ products });
+  }
+);
