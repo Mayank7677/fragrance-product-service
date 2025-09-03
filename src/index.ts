@@ -6,6 +6,7 @@ import cookieParser from "cookie-parser";
 import configureCors from "./configs/cors.config";
 import { errorHandler } from "./middlewares/errorHandler";
 import limiter from "./middlewares/rateLimit";
+import redisClient from "./configs/redisClient";
 
 import productRouter from "./routes/product.route";
 import collectionRouter from "./routes/collection.route";
@@ -28,5 +29,6 @@ app.use(errorHandler);
 const PORT = process.env.PORT || 3030;
 app.listen(PORT, () => {
   connectDB();
+  redisClient.connect();
   console.log(`Server is running on http://localhost:${PORT}`);
 });

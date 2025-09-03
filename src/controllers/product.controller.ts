@@ -8,6 +8,7 @@ import { AppError } from "../utils/appError";
 import { Collection } from "../models/collection.model";
 import { Types } from "mongoose";
 import axios from "axios";
+import redisClient from "../configs/redisClient";
 
 export const createProduct = catchAsync(
   async (req: AuthenticatedRequest, res: Response, next: NextFunction) => {
@@ -122,6 +123,17 @@ export const getAllProducts = catchAsync(
 
     const skip: number = (+page - 1) * +limit;
 
+    // generating unique cache key
+    const cacheKey = `products:${JSON.stringify(filter)}:${page}:${limit}`;
+
+    // fetching from cache first 
+    const cachedProducts = await redisClient.get(cacheKey);
+    if (cachedProducts) {
+      logger.info("Products fetched from cache");
+      return res.status(200).json(JSON.parse(cachedProducts));
+    }
+
+    // fetching from database
     const [products, total] = await Promise.all([
       Product.find(filter)
         .sort({ [sortBy as string]: order === "asc" ? 1 : -1 })
@@ -132,14 +144,19 @@ export const getAllProducts = catchAsync(
       Product.countDocuments(filter),
     ]);
 
-    res.status(200).json({
+    const responseData = {
       success: true,
       total,
       page: +page,
       pageSize: products.length,
       totalPages: Math.ceil(total / +limit),
       products,
-    });
+    }
+
+    // setting cache
+    await redisClient.setEx(cacheKey, 60, JSON.stringify(responseData));
+
+    res.status(200).json(responseData);
   }
 );
 

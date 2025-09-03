@@ -8,6 +8,7 @@ import slugify from "slugify";
 import { Collection } from "../models/collection.model";
 import { startSession } from "mongoose";
 import productModel from "../models/product.model";
+import redisClient from "../configs/redisClient";
 
 export const createCollection = catchAsync(
   async (req: AuthenticatedRequest, res: Response, next: NextFunction) => {
@@ -115,6 +116,17 @@ export const getAllCollections = catchAsync(
       filter.name = { $regex: search, $options: "i" };
     }
 
+    // generating unique cache key
+    const cacheKey = `collections:${JSON.stringify(filter)}:${page}:${limit}`;
+
+    // fetching from cache first 
+    const cachedCollections = await redisClient.get(cacheKey);
+    if (cachedCollections) {
+      logger.info("Collections fetched from cache");
+      return res.status(200).json(JSON.parse(cachedCollections));
+    }
+
+    // fetching from database
     const collections = await Collection.find(filter)
       .sort({ createdAt: -1 })
       .skip(skip)
@@ -122,14 +134,19 @@ export const getAllCollections = catchAsync(
 
     const total = await Collection.countDocuments(filter);
 
-    res.status(200).json({
+    const responseData = {
       success: true,
       total,
       page: +page,
       pageSize: collections.length,
       totalPages: Math.ceil(total / +limit),
       collections,
-    });
+    }
+
+    // setting cache
+    await redisClient.setEx(cacheKey, 60 * 60, JSON.stringify(responseData));
+
+    res.status(200).json(responseData);
   }
 );
 
